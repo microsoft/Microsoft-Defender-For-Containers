@@ -5,7 +5,6 @@
 # If Defender for Containers is enabled, the script inspects the extensions array in the pricing configuration.
 # If the ContainerSensor extension is missing or disabled, the script enables it automatically.
 
-🛡️ Why Container Sensor?
 # Get all subscriptions
 $subs = az account list --query "[].id" -o tsv
 
