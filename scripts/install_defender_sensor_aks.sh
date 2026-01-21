@@ -1,7 +1,7 @@
 #!/bin/bash
 # call like install_defender_sensor_aks.sh --id <CLUSTER_AZURE_RESOURCE_ID> --release_train <RELEASE_TRAIN> --version <VERSION> [--antimalware]
 # where <VERSION> is semver or 'latest'
-# where <RELEASE_TRAIN> is 'public' or 'private'
+# where <RELEASE_TRAIN> is 'stable', 'public', or 'private'
 # including --antimalware will enable antimalware scanning
 export MSYS_NO_PATHCONV=1
 
@@ -16,7 +16,7 @@ usage() {
       echo "install_defender_sensor_aks.sh --id <CLUSTER_AZURE_RESOURCE_ID> --release_train <RELEASE_TRAIN> --version <VERSION> [--antimalware]"
       echo " "
       echo "CLUSTER_AZURE_RESOURCE_ID   Expected format: /subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.ContainerService/managedClusters/<cluster-name>"
-      echo "RELEASE_TRAIN               Expected format: 'public' (for public preview) or 'private' (for private preview)"
+      echo "RELEASE_TRAIN               Expected format: 'stable', 'public' (Public Preview), or 'private' (Private Preview)"
       echo "VERSION                     Expected format: 'latest' or semver"
       exit 1
 }
@@ -26,6 +26,7 @@ if [[ $# -eq 0 ]]; then
 fi
 
 ANTIMALWARE_ENABLED=false
+RELEASE_TRAIN=stable
 
 while test $# -gt 0; do
   case "$1" in
@@ -93,16 +94,14 @@ if [ -z "$SUBSCRIPTION_ID" ]; then
     exit 1
 fi
 
-if [ -z "$RELEASE_TRAIN" ]; then
-    echo "Error: No release train specified."
-    usage
-fi
-if [[ ! "$RELEASE_TRAIN" =~ ^(public|private)$ ]]; then
-    echo "Error: Invalid release train specified. Must be 'public' or 'private'."
+if [[ ! "$RELEASE_TRAIN" =~ ^(stable|public|private)$ ]]; then
+    echo "Error: Invalid release train specified. Must be 'stable', 'public', or 'private'."
     exit 1
 fi
 
 if [ "$RELEASE_TRAIN" == "public" ]; then
+    HELM_REPO="oci://mcr.microsoft.com/azuredefender/microsoft-defender-for-containers"
+elif [ "$RELEASE_TRAIN" == "stable" ]; then
     HELM_REPO="oci://mcr.microsoft.com/azuredefender/microsoft-defender-for-containers"
 else
     HELM_REPO="oci://mcr.microsoft.com/azuredefender-preview/microsoft-defender-for-containers"
@@ -131,6 +130,8 @@ echo "Log file: $LOG_FILE"
 
 if [ "$RELEASE_TRAIN" == "public" ]; then
     log "Using public preview release train"
+elif [ "$RELEASE_TRAIN" == "stable" ]; then
+    log "Using stable release train"
 else
     log "Using private preview release train"
 fi
@@ -187,8 +188,10 @@ WS_PRIMARY_KEY=$(az monitor log-analytics workspace get-shared-keys --resource-g
 # install the sensor helm chart
 
 if [ $VERSION == "latest" ]; then
-    log "Installing latest version"
-    INSTALL_VERSION="--devel"
+    log "Installing latest version"    
+    if [ "$RELEASE_TRAIN" == "public" ]; then
+        INSTALL_VERSION="--devel"
+    fi
 else
     log "Installing version ${VERSION}"
     INSTALL_VERSION="--version ${VERSION}"

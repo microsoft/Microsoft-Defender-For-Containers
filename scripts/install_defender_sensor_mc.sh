@@ -1,5 +1,7 @@
 #!/bin/bash
 # call like install_defender_sensor_mc.sh --id <SECURITY_CONNECTOR_AZURE_RESOURCE_ID> --release_train <RELEASE_TRAIN> --version <VERSION> --distribution <DISTRIBUTION> [--antimalware]
+# where <SECURITY_CONNECTOR_AZURE_RESOURCE_ID> is of the form /subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.Security/securityConnectors/<connector-name>
+# where <RELEASE_TRAIN> is 'stable', 'public', or 'private'
 # where <VERSION> is semver or 'latest'
 # where <DISTRIBUTION> is 'eks', 'gke', or 'eksautomode' (eksautomode uses eks distribution with additional security options)
 # including --antimalware will enable antimalware scanning
@@ -33,7 +35,7 @@ usage() {
       echo "install_defender_sensor_mc.sh --id <SECURITY_CONNECTOR_AZURE_RESOURCE_ID> --release_train <RELEASE_TRAIN> --version <VERSION> --distribution <DISTRIBUTION> [--antimalware]"
       echo " "
       echo "SECURITY_CONNECTOR_AZURE_RESOURCE_ID   Expected format: /subscriptions/<subscription-id>/resource[gG]roups/<resource-group-name>/providers/Microsoft.Security/securityConnectors/<connector-name>"
-      echo "RELEASE_TRAIN                          Expected format: 'public' (for public preview) or 'private' (for private preview)"
+      echo "RELEASE_TRAIN                          Expected format: 'stable', 'public' (Public Preview), or 'private' (Private Preview)"
       echo "VERSION                                Expected format: 'latest' or semver"
       echo "DISTRIBUTION                           Expected format: 'eks', 'gke', or 'eksautomode'"
       echo " "
@@ -45,6 +47,7 @@ if [[ $# -eq 0 ]]; then
 fi
 
 ANTIMALWARE_ENABLED=false
+RELEASE_TRAIN=stable
 
 while test $# -gt 0; do
   case "$1" in
@@ -107,18 +110,16 @@ if [[ ! $CONNECTOR_AZURE_RESOURCE_ID =~ ^/subscriptions/[0-9a-fA-F-]+/resource[g
     exit 1
 fi
 
-if [ -z "$RELEASE_TRAIN" ]; then
-    log "Error: No release train specified."
-    usage
-    exit 1
-fi
-if [[ ! "$RELEASE_TRAIN" =~ ^(public|private)$ ]]; then
-    log "Error: Invalid release train specified. Must be 'public' or 'private'."
+if [[ ! "$RELEASE_TRAIN" =~ ^(stable|public|private)$ ]]; then
+    log "Error: Invalid release train specified. Must be 'stable', 'public', or 'private'."
     exit 1
 fi
 
 if [ "$RELEASE_TRAIN" == "public" ]; then
     log "Using public preview release train"
+    HELM_REPO="oci://mcr.microsoft.com/azuredefender/microsoft-defender-for-containers"
+elif [ "$RELEASE_TRAIN" == "stable" ]; then
+    log "Using stable release train"
     HELM_REPO="oci://mcr.microsoft.com/azuredefender/microsoft-defender-for-containers"
 else
     log "Using private preview release train"
@@ -225,7 +226,9 @@ log "Workspace Primary Key: $WS_PRIMARY_KEY"
 
 if [ $VERSION == "latest" ]; then
     log "Installing latest version"
-    INSTALL_VERSION="--devel"
+    if [ "$RELEASE_TRAIN" == "public" ]; then
+        INSTALL_VERSION="--devel"
+    fi
 else
     log "Installing version ${VERSION}"
     INSTALL_VERSION="--version ${VERSION}"
