@@ -1,7 +1,8 @@
 #!/bin/bash
-# call like install_defender_sensor_aks.sh --id <CLUSTER_AZURE_RESOURCE_ID> --release_train <RELEASE_TRAIN> --version <VERSION> [--antimalware]
+# call like install_defender_sensor_aks.sh --id <CLUSTER_AZURE_RESOURCE_ID> --release_train <RELEASE_TRAIN> --version <VERSION> [--namespace <NAMESPACE>] [--antimalware]
 # where <VERSION> is semver or 'latest'
 # where <RELEASE_TRAIN> is 'stable', 'public', or 'private'
+# where <NAMESPACE> is optional (default: 'mdc')
 # including --antimalware will enable antimalware scanning
 export MSYS_NO_PATHCONV=1
 
@@ -13,11 +14,12 @@ usage() {
       echo "install_defender_sensor_aks - deploy Microsoft Defender for Containers to AKS clusters"
       echo " "
       echo "Usage"
-      echo "install_defender_sensor_aks.sh --id <CLUSTER_AZURE_RESOURCE_ID> --release_train <RELEASE_TRAIN> --version <VERSION> [--antimalware]"
+      echo "install_defender_sensor_aks.sh --id <CLUSTER_AZURE_RESOURCE_ID> --release_train <RELEASE_TRAIN> --version <VERSION> [--namespace <NAMESPACE>] [--antimalware]"
       echo " "
       echo "CLUSTER_AZURE_RESOURCE_ID   Expected format: /subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.ContainerService/managedClusters/<cluster-name>"
       echo "RELEASE_TRAIN               Expected format: 'stable', 'public' (Public Preview), or 'private' (Private Preview)"
       echo "VERSION                     Expected format: 'latest' or semver"
+      echo "NAMESPACE                   Optional Kubernetes namespace to install into (default: 'mdc')"
       exit 1
 }
 
@@ -27,6 +29,7 @@ fi
 
 ANTIMALWARE_ENABLED=false
 RELEASE_TRAIN=stable
+NAMESPACE=mdc
 
 while test $# -gt 0; do
   case "$1" in
@@ -56,6 +59,16 @@ while test $# -gt 0; do
         RELEASE_TRAIN=$1
       else
         echo "missing value for flag --release_train"
+        exit 1
+      fi
+      shift
+      ;;
+    --namespace)
+      shift
+      if test $# -gt 0; then
+        NAMESPACE=$1
+      else
+        echo "missing value for flag --namespace"
         exit 1
       fi
       shift
@@ -188,7 +201,7 @@ WS_PRIMARY_KEY=$(az monitor log-analytics workspace get-shared-keys --resource-g
 # install the sensor helm chart
 
 if [ $VERSION == "latest" ]; then
-    log "Installing latest version"    
+    log "Installing latest version"
     if [ "$RELEASE_TRAIN" == "public" ]; then
         INSTALL_VERSION="--devel"
     fi
@@ -210,7 +223,7 @@ fi
 run "helm install microsoft-defender-for-containers \
     ${HELM_REPO} \
     ${INSTALL_VERSION} \
-    --namespace mdc \
+    --namespace $NAMESPACE \
     --create-namespace \
     --set microsoft-defender-for-containers-sensor.omsagent.secret.wsid=$WS_GUID \
     --set microsoft-defender-for-containers-sensor.omsagent.secret.key=$WS_PRIMARY_KEY \
